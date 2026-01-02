@@ -1,0 +1,379 @@
+#!/usr/bin/env python3
+
+################################################################################
+#                    CUSTOM DOJO PANEL SYSTEM - v1.0                          #
+#                                                                               #
+#  Ein eigenständiges Panel-System als Polybar-Ersatz                        #
+#  Entwickelt speziell für Custom Arch Linux DOJO Edition                    #
+#  Technologies: GTK3, Python3, Systemd D-Bus                                 #
+################################################################################
+
+import gi
+gi.require_version('Gtk', '3.0')
+gi.require_version('Gdk', '3.0')
+
+from gi.repository import Gtk, Gdk, GLib, GObject
+import subprocess
+import psutil
+import time
+import json
+import os
+from datetime import datetime
+from typing import Dict, List, Tuple
+import signal
+import sys
+
+# === CONSTANTS ===
+REFRESH_INTERVAL = 1000  # ms
+PANEL_HEIGHT = 32
+PANEL_POSITION = "top"  # top or bottom
+
+# === COLORS (DOJO Theme) ===
+COLORS = {
+    "bg_dark": "#0a0e27",
+    "bg_lighter": "#1a1f3a",
+    "bg_accent": "#2a2f4a",
+    "fg_main": "#e0e6ff",
+    "fg_secondary": "#a0aacf",
+    "accent_cyan": "#00d9ff",
+    "accent_blue": "#1e90ff",
+    "accent_red": "#ff4444",
+    "accent_green": "#00ff88",
+}
+
+# === ICONS (Unicode) ===
+ICONS = {
+    "cpu": "󰻠",
+    "memory": "󰟀",
+    "disk": "󰋊",
+    "network_up": "󰕒",
+    "network_down": "󰕑",
+    "volume": "󰕾",
+    "brightness": "󰃠",
+    "battery": "󰁹",
+    "clock": "󰔚",
+    "workspace": "󰕼",
+    "temperature": "󰔔",
+    "power": "󰐡",
+}
+
+class SystemInfo:
+    """Sammelt Systemninformationen"""
+    
+    @staticmethod
+    def get_cpu_usage() -> float:
+        """CPU-Auslastung in %"""
+        return psutil.cpu_percent(interval=0.1)
+    
+    @staticmethod
+    def get_memory_usage() -> Tuple[float, float]:
+        """RAM-Auslastung (used, total) in GB"""
+        memory = psutil.virtual_memory()
+        used = memory.used / (1024**3)
+        total = memory.total / (1024**3)
+        return used, total
+    
+    @staticmethod
+    def get_disk_usage() -> Tuple[float, float]:
+        """Festplatte (used, total) in GB"""
+        disk = psutil.disk_usage('/')
+        used = disk.used / (1024**3)
+        total = disk.total / (1024**3)
+        return used, total
+    
+    @staticmethod
+    def get_temperature() -> float:
+        """CPU-Temperatur in °C"""
+        try:
+            temps = psutil.sensors_temperatures()
+            if 'coretemp' in temps:
+                return temps['coretemp'][0].current
+            elif 'k10temp' in temps:
+                return temps['k10temp'][0].current
+            return 0.0
+        except:
+            return 0.0
+    
+    @staticmethod
+    def get_network_stats() -> Tuple[float, float]:
+        """Netzwerk (upload, download) in MB/s"""
+        net_io = psutil.net_io_counters()
+        # Vereinfachte Darstellung
+        return 0.0, 0.0  # Würde kontinuierlich gemessen werden
+    
+    @staticmethod
+    def get_volume() -> int:
+        """Systemlautstärke 0-100"""
+        try:
+            result = subprocess.run(
+                ["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
+                capture_output=True,
+                text=True
+            )
+            if "%" in result.stdout:
+                volume = int(result.stdout.split("%")[0].split()[-1])
+                return volume
+        except:
+            pass
+        return 0
+    
+    @staticmethod
+    def get_brightness() -> int:
+        """Bildschirmhelligkeit 0-100"""
+        try:
+            result = subprocess.run(
+                ["light"],
+                capture_output=True,
+                text=True
+            )
+            return int(float(result.stdout.strip()))
+        except:
+            return 0
+    
+    @staticmethod
+    def get_battery() -> Tuple[int, str]:
+        """Batteriestatus (prozent, status)"""
+        try:
+            battery = psutil.sensors_battery()
+            if battery:
+                percent = int(battery.percent)
+                status = "charging" if battery.power_plugged else "discharging"
+                return percent, status
+        except:
+            pass
+        return 0, "unknown"
+    
+    @staticmethod
+    def get_time() -> str:
+        """Aktuelle Zeit HH:MM:SS"""
+        return datetime.now().strftime("%H:%M:%S")
+    
+    @staticmethod
+    def get_date() -> str:
+        """Aktuelles Datum DD.MM.YYYY"""
+        return datetime.now().strftime("%d.%m.%Y")
+
+class PanelWidget(Gtk.DrawingArea):
+    """Basis-Widget für Panel-Elemente"""
+    
+    def __init__(self, width: int = 100):
+        super().__init__()
+        self.set_size_request(width, PANEL_HEIGHT)
+        self.set_property("expand", False)
+        self.set_property("halign", Gtk.Align.CENTER)
+        self.set_property("valign", Gtk.Align.CENTER)
+        
+        # CSS Styling
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(f"""
+            * {{
+                background-color: {COLORS["bg_dark"]};
+                color: {COLORS["fg_main"]};
+                font-family: JetBrains Mono;
+                font-size: 10px;
+                margin: 0px;
+                padding: 4px 8px;
+            }}
+        """.encode())
+        context = self.get_style_context()
+        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+class CPUWidget(Gtk.Label):
+    """CPU-Auslastungs-Widget"""
+    
+    def __init__(self):
+        super().__init__()
+        self.set_markup(f"<span color='{COLORS['accent_blue']}'>{ICONS['cpu']} ---%</span>")
+        self.update()
+        GLib.timeout_add(REFRESH_INTERVAL, self.update)
+    
+    def update(self) -> bool:
+        cpu = SystemInfo.get_cpu_usage()
+        color = COLORS['accent_green'] if cpu < 50 else COLORS['accent_red']
+        self.set_markup(f"<span color='{color}'>{ICONS['cpu']} {cpu:.0f}%</span>")
+        return True
+
+class MemoryWidget(Gtk.Label):
+    """RAM-Auslastungs-Widget"""
+    
+    def __init__(self):
+        super().__init__()
+        self.set_markup(f"<span color='{COLORS['accent_blue']}'>{ICONS['memory']} --.-/--.-GB</span>")
+        self.update()
+        GLib.timeout_add(REFRESH_INTERVAL, self.update)
+    
+    def update(self) -> bool:
+        used, total = SystemInfo.get_memory_usage()
+        percent = (used / total) * 100
+        color = COLORS['accent_green'] if percent < 70 else COLORS['accent_red']
+        self.set_markup(f"<span color='{color}'>{ICONS['memory']} {used:.1f}/{total:.1f}GB</span>")
+        return True
+
+class TemperatureWidget(Gtk.Label):
+    """CPU-Temperatur-Widget"""
+    
+    def __init__(self):
+        super().__init__()
+        self.set_markup(f"<span color='{COLORS['accent_blue']}'>{ICONS['temperature']} --°C</span>")
+        self.update()
+        GLib.timeout_add(REFRESH_INTERVAL * 2, self.update)  # Alle 2 Sekunden
+    
+    def update(self) -> bool:
+        temp = SystemInfo.get_temperature()
+        if temp > 0:
+            if temp < 60:
+                color = COLORS['accent_green']
+            elif temp < 80:
+                color = COLORS['accent_cyan']
+            else:
+                color = COLORS['accent_red']
+            self.set_markup(f"<span color='{color}'>{ICONS['temperature']} {temp:.1f}°C</span>")
+        return True
+
+class VolumeWidget(Gtk.Label):
+    """Lautstärke-Widget"""
+    
+    def __init__(self):
+        super().__init__()
+        self.set_markup(f"<span color='{COLORS['accent_blue']}'>{ICONS['volume']} ---%</span>")
+        self.update()
+        GLib.timeout_add(REFRESH_INTERVAL * 2, self.update)
+    
+    def update(self) -> bool:
+        volume = SystemInfo.get_volume()
+        color = COLORS['accent_green'] if volume > 0 else COLORS['fg_secondary']
+        self.set_markup(f"<span color='{color}'>{ICONS['volume']} {volume}%</span>")
+        return True
+
+class BrightnessWidget(Gtk.Label):
+    """Helligkeit-Widget"""
+    
+    def __init__(self):
+        super().__init__()
+        self.set_markup(f"<span color='{COLORS['accent_blue']}'>{ICONS['brightness']} ---%</span>")
+        self.update()
+        GLib.timeout_add(REFRESH_INTERVAL * 2, self.update)
+    
+    def update(self) -> bool:
+        brightness = SystemInfo.get_brightness()
+        self.set_markup(f"<span color='{COLORS['accent_cyan']}'>{ICONS['brightness']} {brightness}%</span>")
+        return True
+
+class ClockWidget(Gtk.Label):
+    """Zeit und Datum Widget"""
+    
+    def __init__(self):
+        super().__init__()
+        self.update()
+        GLib.timeout_add(1000, self.update)  # Jede Sekunde
+    
+    def update(self) -> bool:
+        time_str = SystemInfo.get_time()
+        date_str = SystemInfo.get_date()
+        self.set_markup(f"<span color='{COLORS['accent_cyan']}'>{ICONS['clock']} {time_str} | {date_str}</span>")
+        return True
+
+class DojoPanelWindow(Gtk.Window):
+    """Hauptfenster für das DOJO Panel"""
+    
+    def __init__(self):
+        super().__init__(Gtk.WindowType.TOPLEVEL)
+        
+        # Fenster-Eigenschaften
+        self.set_type_hint(Gdk.WindowTypeHint.DOCK)
+        self.set_keep_above(True)
+        self.set_decorated(False)
+        self.set_app_paintable(True)
+        self.set_size_request(-1, PANEL_HEIGHT)
+        
+        # Position und Größe
+        screen = self.get_screen()
+        width = screen.get_width()
+        self.resize(width, PANEL_HEIGHT)
+        
+        if PANEL_POSITION == "top":
+            self.move(0, 0)
+        else:
+            self.move(0, screen.get_height() - PANEL_HEIGHT)
+        
+        # Hintergrund-Farbe
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(f"""
+            window {{
+                background-color: {COLORS["bg_dark"]};
+                border-bottom: 1px solid {COLORS["accent_cyan"]};
+            }}
+        """.encode())
+        context = self.get_style_context()
+        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        
+        # Haupt-Container
+        main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        main_box.set_margin_start(8)
+        main_box.set_margin_end(8)
+        main_box.set_margin_top(2)
+        main_box.set_margin_bottom(2)
+        
+        # Linke Seite - Workspace Indicator
+        left_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        workspace_label = Gtk.Label()
+        workspace_label.set_markup(f"<span color='{COLORS['accent_cyan']}'>{ICONS['workspace']} WS-1</span>")
+        left_box.pack_start(workspace_label, False, False, 0)
+        
+        # Separator
+        separator1 = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
+        left_box.pack_start(separator1, False, False, 4)
+        
+        main_box.pack_start(left_box, False, False, 0)
+        
+        # Zentrale Seite - expandierbar
+        center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        main_box.pack_start(center_box, True, True, 0)
+        
+        # Rechte Seite - System Info
+        right_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        
+        right_box.pack_start(CPUWidget(), False, False, 0)
+        right_box.pack_start(MemoryWidget(), False, False, 0)
+        right_box.pack_start(TemperatureWidget(), False, False, 0)
+        right_box.pack_start(VolumeWidget(), False, False, 0)
+        right_box.pack_start(BrightnessWidget(), False, False, 0)
+        
+        # Separator vor Zeit
+        separator2 = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
+        right_box.pack_start(separator2, False, False, 4)
+        
+        right_box.pack_start(ClockWidget(), False, False, 0)
+        
+        main_box.pack_end(right_box, False, False, 0)
+        
+        self.add(main_box)
+        
+        # Signal handlers
+        self.connect("destroy", Gtk.main_quit)
+        self.connect("delete-event", Gtk.main_quit)
+        
+        # Graceful shutdown
+        signal.signal(signal.SIGTERM, self._on_signal)
+        signal.signal(signal.SIGINT, self._on_signal)
+    
+    def _on_signal(self, signum, frame):
+        """Signal handler für graceful shutdown"""
+        Gtk.main_quit()
+
+def main():
+    """Haupteinstiegspunkt"""
+    print("[DOJO Panel] Starting Custom Panel System...")
+    
+    # Fenster erstellen und anzeigen
+    window = DojoPanelWindow()
+    window.show_all()
+    
+    print("[DOJO Panel] Panel initialized successfully")
+    print("[DOJO Panel] Press Ctrl+C to exit")
+    
+    # GTK Main Loop
+    Gtk.main()
+
+if __name__ == "__main__":
+    main()

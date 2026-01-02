@@ -1,0 +1,246 @@
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
+# ║                      CUSTOM ARCH LINUX - i3 CONFIG                            ║
+# ║                    Based on DoJo Hacking Philosophy                           ║
+# ║                      Version 1.0 - Master Edition                             ║
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
+
+# === MODKEY DEFINITION ===
+set $mod Mod4
+set $alt Mod1
+
+# === COLORS - DOJO THEME ===
+set $bg_dark        #0a0e27
+set $bg_lighter     #1a1f3a
+set $bg_accent      #2a2f4a
+set $fg_main        #e0e6ff
+set $fg_secondary   #a0aacf
+set $accent_cyan    #00d9ff
+set $accent_blue    #1e90ff
+set $accent_red     #ff4444
+set $accent_green   #00ff88
+set $border_active  #00d9ff
+set $border_inactive #2a2f4a
+
+# === FONTS ===
+font pango:JetBrains Mono 10
+# Alternative: font pango:Hack 10
+
+# === BORDERS & GAPS ===
+default_border pixel 2
+default_floating_border pixel 2
+gaps inner 8
+gaps outer 4
+gaps bottom 0
+
+# Gap-Keybindings
+bindsym $mod+g gaps inner current plus 2
+bindsym $mod+shift+g gaps inner current minus 2
+
+# === WINDOW COLORS ===
+# class                  border           background      text             indicator        child_border
+client.focused          $accent_cyan     $bg_lighter     $fg_main         $accent_blue     $accent_cyan
+client.focused_inactive $border_inactive $bg_darker      $fg_secondary    $bg_accent       $border_inactive
+client.unfocused        $border_inactive $bg_dark        $fg_secondary    $bg_dark         $border_inactive
+client.urgent           $accent_red      $bg_dark        $accent_red      $accent_red      $accent_red
+client.placeholder      $bg_dark         $bg_dark        $fg_secondary    $bg_dark         $bg_dark
+
+# === WORKSPACES ===
+set $ws1 "1: ⌨️  Terminal"
+set $ws2 "2: 🔍 Recon"
+set $ws3 "3: 🛠️  Tools"
+set $ws4 "4: 📊 Monitor"
+set $ws5 "5: 🔐 Exploit"
+set $ws6 "6: 📝 Notes"
+set $ws7 "7: 🌐 Web"
+set $ws8 "8: 📁 Files"
+set $ws9 "9: ⚙️  System"
+set $ws10 "10: 🎮 Other"
+
+# Workspace assignment
+assign [class="kitty|Alacritty|urxvt"] $ws1
+assign [class="Firefox|Chromium"] $ws7
+assign [class="Thunar|Nautilus"] $ws8
+
+# === WORKSPACE NAVIGATION ===
+bindsym $mod+1 workspace $ws1
+bindsym $mod+2 workspace $ws2
+bindsym $mod+3 workspace $ws3
+bindsym $mod+4 workspace $ws4
+bindsym $mod+5 workspace $ws5
+bindsym $mod+6 workspace $ws6
+bindsym $mod+7 workspace $ws7
+bindsym $mod+8 workspace $ws8
+bindsym $mod+9 workspace $ws9
+bindsym $mod+0 workspace $ws10
+
+# Move focused window to workspace
+bindsym $mod+shift+1 move container to workspace $ws1
+bindsym $mod+shift+2 move container to workspace $ws2
+bindsym $mod+shift+3 move container to workspace $ws3
+bindsym $mod+shift+4 move container to workspace $ws4
+bindsym $mod+shift+5 move container to workspace $ws5
+bindsym $mod+shift+6 move container to workspace $ws6
+bindsym $mod+shift+7 move container to workspace $ws7
+bindsym $mod+shift+8 move container to workspace $ws8
+bindsym $mod+shift+9 move container to workspace $ws9
+bindsym $mod+shift+0 move container to workspace $ws10
+
+# Cycle workspaces
+bindsym $mod+Tab workspace next
+bindsym $mod+shift+Tab workspace prev
+
+# === WINDOW NAVIGATION ===
+bindsym $mod+j focus left
+bindsym $mod+k focus down
+bindsym $mod+l focus up
+bindsym $mod+semicolon focus right
+bindsym $mod+Left focus left
+bindsym $mod+Down focus down
+bindsym $mod+Up focus up
+bindsym $mod+Right focus right
+
+# === WINDOW MOVEMENT ===
+bindsym $mod+shift+j move left
+bindsym $mod+shift+k move down
+bindsym $mod+shift+l move up
+bindsym $mod+shift+semicolon move right
+bindsym $mod+shift+Left move left
+bindsym $mod+shift+Down move down
+bindsym $mod+shift+Up move up
+bindsym $mod+shift+Right move right
+
+# === WINDOW MANAGEMENT ===
+bindsym $mod+h split h
+bindsym $mod+v split v
+bindsym $mod+f fullscreen toggle
+bindsym $mod+shift+space floating toggle
+bindsym $mod+space focus mode_toggle
+
+# === LAYOUTS ===
+bindsym $mod+s layout stacking
+bindsym $mod+w layout tabbed
+bindsym $mod+e layout toggle split
+bindsym $mod+shift+e layout default
+
+# === APPLICATION LAUNCHER ===
+# Using rofi for custom launcher (dark theme matching)
+bindsym $mod+d exec rofi -show drun -theme ~/.config/rofi/dojo-dark.rasi
+bindsym $mod+shift+d exec rofi -show run -theme ~/.config/rofi/dojo-dark.rasi
+
+# === TERMINAL ===
+bindsym $mod+Return exec kitty --config ~/.config/kitty/kitty.conf
+bindsym $alt+Return exec kitty --config ~/.config/kitty/kitty.conf
+
+# === QUICK LAUNCHERS (Custom Tools) ===
+bindsym $mod+ctrl+t exec kitty --config ~/.config/kitty/kitty.conf -e bash -c "tmux attach || tmux"
+bindsym $mod+ctrl+b exec firefox
+bindsym $mod+ctrl+e exec code
+bindsym $mod+ctrl+f exec thunar
+
+# === SYSTEM CONTROL ===
+bindsym $mod+q kill
+bindsym $mod+shift+c reload
+bindsym $mod+shift+r restart
+bindsym $mod+shift+e exec i3-nagbar -t warning -m "Exit i3?" -B "Yes, exit i3" "i3-msg exit"
+
+# === SCREEN CONTROL ===
+# Brightness (requires light or xbacklight)
+bindsym XF86MonBrightnessUp exec light -A 5
+bindsym XF86MonBrightnessDown exec light -U 5
+
+# Volume
+bindsym XF86AudioRaiseVolume exec pactl set-sink-volume @DEFAULT_SINK@ +5%
+bindsym XF86AudioLowerVolume exec pactl set-sink-volume @DEFAULT_SINK@ -5%
+bindsym XF86AudioMute exec pactl set-sink-mute @DEFAULT_SINK@ toggle
+
+# Screenshots
+bindsym Print exec flameshot gui
+bindsym shift+Print exec flameshot screen -c
+
+# === RESIZE MODE ===
+mode "resize" {
+  bindsym j resize shrink width 10 px or 10 ppt
+  bindsym k resize grow height 10 px or 10 ppt
+  bindsym l resize shrink height 10 px or 10 ppt
+  bindsym semicolon resize grow width 10 px or 10 ppt
+  bindsym Left resize shrink width 10 px or 10 ppt
+  bindsym Down resize grow height 10 px or 10 ppt
+  bindsym Up resize shrink height 10 px or 10 ppt
+  bindsym Right resize grow width 10 px or 10 ppt
+  bindsym Return mode "default"
+  bindsym Escape mode "default"
+}
+bindsym $mod+r mode "resize"
+
+# === MOUSE CONTROLS ===
+floating_modifier $mod
+mouse_warping none
+
+# === STARTUP APPLICATIONS ===
+# Wallpaper
+exec --no-startup-id feh --bg-fill ~/.config/dojo/wallpaper.png
+
+# Custom Panel (wird später durch unser Panel ersetzt)
+exec --no-startup-id ~/.config/dojo/panel.sh
+
+# Polybar als Fallback (später entfernen)
+# exec --no-startup-id polybar main
+
+# Dunst Notifications
+exec --no-startup-id dunst -conf ~/.config/dunst/dunstrc
+
+# Compositor
+exec --no-startup-id picom --experimental-backends
+
+# Keyboard Layout (German)
+exec --no-startup-id setxkbmap de
+
+# Custom Scripts
+exec --no-startup-id ~/.config/dojo/startup.sh
+
+# Network Manager Applet
+exec --no-startup-id nm-applet
+
+# === STATUS BAR / PANEL (i3bar) ===
+# Wird durch CustomPanel ersetzt, aber für Fallback:
+bar {
+  position bottom
+  font pango:JetBrains Mono 9
+  
+  colors {
+    background $bg_dark
+    statusline $fg_main
+    separator  $accent_cyan
+    
+    focused_workspace  $accent_cyan  $bg_lighter  $fg_main
+    active_workspace   $accent_blue  $bg_accent   $fg_main
+    inactive_workspace $bg_accent    $bg_dark     $fg_secondary
+    urgent_workspace   $accent_red   $bg_dark     $accent_red
+  }
+  
+  status_command i3blocks -c ~/.config/i3blocks/config
+  
+  # Remove i3bar wenn Custom Panel aktiv ist
+  # hidden_state hide
+  # modifier $mod
+}
+
+# === SCRATCHPAD ===
+bindsym $mod+shift+minus move scratchpad
+bindsym $mod+minus scratchpad show
+
+# === WINDOW RULES ===
+for_window [window_role="pop-up"] floating enable
+for_window [window_role="task_dialog"] floating enable
+for_window [class="(?i)pavucontrol"] floating enable, resize set 800 600
+for_window [class="(?i)blueman-manager"] floating enable
+for_window [class="(?i)nm-connection-editor"] floating enable
+for_window [class="Wifite"] floating enable
+for_window [class="GParted"] floating enable
+
+# === CUSTOM DOJO COMMANDS ===
+# Diesen Bereich erweitern mit eigenem Toolkit
+
+# === EOF ===
+# Last edited: 2026-01-02
+# DoJo Edition - Custom Arch Linux
